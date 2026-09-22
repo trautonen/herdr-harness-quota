@@ -1,0 +1,15 @@
+{
+  "name": "trautonen-tools",
+  "owner": {
+    "name": "Tapio Rautonen"
+  },
+  "description": "CLI integrations for coding harnesses",
+  "plugins": [
+    {
+      "name": "harness-quota",
+      "source": "./",
+      "description": "Read normalized Claude, Codex, and Cursor quota",
+      "version": "0.2.0"
+    }
+  ]
+}

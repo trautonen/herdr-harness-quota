@@ -1,0 +1,31 @@
+{
+  "name": "@trautonen/harness-quota",
+  "version": "0.2.0",
+  "description": "Read normalized Claude, Codex, and Cursor quota",
+  "author": "Tapio Rautonen",
+  "license": "MIT",
+  "keywords": [
+    "pi-package",
+    "claude",
+    "codex",
+    "cursor",
+    "quota"
+  ],
+  "files": [
+    "bin/harness-quota",
+    "bin/herdr-harness-quota",
+    "skills",
+    "src/harness_quota/*.py",
+    "src/harness_quota/providers/*.py",
+    "LICENSE",
+    "README.md"
+  ],
+  "bin": {
+    "harness-quota": "bin/harness-quota"
+  },
+  "pi": {
+    "skills": [
+      "./skills/harness-quota"
+    ]
+  }
+}

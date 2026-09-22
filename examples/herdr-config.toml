@@ -1,0 +1,8 @@
+[ui]
+tab_bar_position = "bottom"
+tab_bar_right_separator = "  "
+tab_bar_right = [
+  { type = "command", command = "/workspace/trautonen/herdr-harness-quota/bin/herdr-harness-quota chip claude", interval_seconds = 30, timeout_seconds = 2 },
+  { type = "command", command = "/workspace/trautonen/herdr-harness-quota/bin/herdr-harness-quota chip codex", interval_seconds = 30, timeout_seconds = 2 },
+  { type = "command", command = "/workspace/trautonen/herdr-harness-quota/bin/herdr-harness-quota chip cursor", interval_seconds = 30, timeout_seconds = 2 },
+]

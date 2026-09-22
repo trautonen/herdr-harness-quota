@@ -1,0 +1,24 @@
+id = "harness-quota"
+name = "Harness Quota"
+version = "0.2.0"
+min_herdr_version = "0.9.0"
+description = "Display Claude, Codex, and Cursor quota in Herdr"
+platforms = ["macos", "linux"]
+
+[[actions]]
+id = "refresh-all"
+title = "Quota: refresh all"
+contexts = ["workspace"]
+command = ["bash", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-harness-quota\" refresh all"]
+
+[[actions]]
+id = "details"
+title = "Quota: show details"
+contexts = ["workspace"]
+command = ["bash", "-c", "exec herdr plugin pane open --plugin harness-quota --entrypoint details --placement overlay --workspace \"$HERDR_WORKSPACE_ID\" --focus"]
+
+[[panes]]
+id = "details"
+title = "Harness quota"
+placement = "overlay"
+command = ["bash", "-c", "\"$HERDR_PLUGIN_ROOT/bin/herdr-harness-quota\" details; printf '\\nPress Enter to close.'; read -r"]
