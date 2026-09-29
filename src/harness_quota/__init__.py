@@ -1,4 +1,4 @@
-from . import report
+from . import history, report
 from .cli import main, parser
 from .config import PROVIDERS, VERSION
 from .model import complete_windows
@@ -28,6 +28,7 @@ __all__ = [
     "VERSION",
     "complete_windows",
     "format_chip",
+    "history",
     "main",
     "parser",
     "read_snapshot",

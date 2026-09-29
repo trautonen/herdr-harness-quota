@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import Any
 
 from ..auth import read_credentials, read_pi_credential, required_string
+from ..history import record_snapshot
 from ..model import complete_windows, normalized_window
-from ..storage import write_snapshot
 from ..transport import fetch_json
 
 USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
@@ -100,4 +100,4 @@ def refresh(timeout: float = 12.0) -> None:
     windows = extract_windows(payload)
     if not windows:
         raise RuntimeError("Claude returned no quota windows")
-    write_snapshot("claude", windows)
+    record_snapshot("claude", windows)

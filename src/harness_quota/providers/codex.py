@@ -5,8 +5,8 @@ from pathlib import Path
 from typing import Any
 
 from ..auth import decode_jwt_payload, read_credentials, read_pi_credential, required_string
+from ..history import record_snapshot
 from ..model import complete_windows, normalized_window
-from ..storage import write_snapshot
 from ..transport import fetch_json
 
 USAGE_URL = "https://chatgpt.com/backend-api/wham/usage"
@@ -77,4 +77,4 @@ def refresh(timeout: float = 12.0) -> None:
     windows = extract_windows(payload)
     if not windows:
         raise RuntimeError("Codex returned no quota windows")
-    write_snapshot("codex", windows)
+    record_snapshot("codex", windows)

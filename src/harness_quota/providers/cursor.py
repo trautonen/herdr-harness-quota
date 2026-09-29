@@ -16,8 +16,8 @@ from ..auth import (
     read_pi_credential,
     required_string,
 )
+from ..history import record_snapshot
 from ..model import complete_windows, normalized_window, numeric_value
-from ..storage import write_snapshot
 from ..transport import fetch_json
 
 API_URL = "https://api2.cursor.sh"
@@ -209,4 +209,4 @@ def refresh(timeout: float = 12.0) -> None:
     windows = extract_windows(payload)
     if not windows:
         raise RuntimeError("Cursor returned no quota windows")
-    write_snapshot("cursor", windows)
+    record_snapshot("cursor", windows)

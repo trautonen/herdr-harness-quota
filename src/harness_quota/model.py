@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from datetime import datetime
 from typing import Any
 
@@ -9,7 +10,13 @@ from .config import CANONICAL_MINUTES
 def percentage(value: Any) -> int | None:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
-    return max(0, min(100, round(float(value))))
+    try:
+        number = float(value)
+    except OverflowError:
+        return None
+    if not math.isfinite(number):
+        return None
+    return max(0, min(100, round(number)))
 
 
 def numeric_value(value: Any) -> float | None:
