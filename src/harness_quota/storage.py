@@ -26,16 +26,13 @@ def snapshot_path(provider: str) -> Path:
     return cache_directory() / f"{provider}.json"
 
 
-def write_snapshot(provider: str, windows: list[dict[str, Any]]) -> None:
-    payload = {"provider": provider, "capturedAt": int(time.time()), "windows": windows}
-    destination = snapshot_path(provider)
+def write_private_file(destination: Path, text: str) -> None:
     file_descriptor, temporary_name = tempfile.mkstemp(
-        prefix=f".{provider}-", dir=destination.parent
+        prefix=f".{destination.name}-", dir=destination.parent
     )
     try:
         with os.fdopen(file_descriptor, "w", encoding="utf-8") as temporary_file:
-            json.dump(payload, temporary_file, separators=(",", ":"))
-            temporary_file.write("\n")
+            temporary_file.write(text)
         os.chmod(temporary_name, 0o600)
         os.replace(temporary_name, destination)
     finally:
@@ -45,14 +42,24 @@ def write_snapshot(provider: str, windows: list[dict[str, Any]]) -> None:
             pass
 
 
+def read_private_file(path: Path) -> str | None:
+    path_stat = path.lstat()
+    if not stat.S_ISREG(path_stat.st_mode) or path_stat.st_uid != os.getuid():
+        return None
+    return path.read_text(encoding="utf-8")
+
+
+def write_snapshot(provider: str, windows: list[dict[str, Any]]) -> None:
+    payload = {"provider": provider, "capturedAt": int(time.time()), "windows": windows}
+    write_private_file(snapshot_path(provider), json.dumps(payload, separators=(",", ":")) + "\n")
+
+
 def read_snapshot(provider: str, max_age: int | None = DEFAULT_MAX_AGE) -> dict[str, Any] | None:
     try:
-        path = snapshot_path(provider)
-        path_stat = path.lstat()
-        if not stat.S_ISREG(path_stat.st_mode) or path_stat.st_uid != os.getuid():
+        text = read_private_file(snapshot_path(provider))
+        if text is None:
             return None
-        with path.open(encoding="utf-8") as snapshot_file:
-            snapshot = json.load(snapshot_file)
+        snapshot = json.loads(text)
         captured_at = int(snapshot["capturedAt"])
         now = time.time()
         if captured_at > now + 60 or (max_age is not None and now - captured_at > max_age):

@@ -14,7 +14,13 @@ Every available provider has three ordered windows:
 | 10080 | 1 week |
 | 43200 | 30 days |
 
-A missing monthly value is estimated with:
+Claude and Codex do not report a 30-day window, so it is estimated from the recorded weekly usage in the [cache](#cache). A weekly period is identified by its reset time rounded to the hour. The estimate uses the current week and the peak of every completed week that ended within the last 30 days. Each completed week is weighted by how much of it falls inside those 30 days:
+
+```text
+round((current weekly usedPercent + Σ peak × overlap) × 7 days / (current week elapsed + Σ overlap × 7 days))
+```
+
+Weeks without recorded samples are left out, so a gap in the history does not count as zero usage. A steady 50% per week gives 50%. Until a completed week is recorded, or when the weekly window has no reset time, the 30-day value falls back to:
 
 ```text
 round(5-hour usedPercent × 0.30 + weekly usedPercent × 0.70)
@@ -83,6 +89,7 @@ The Python source is a package under `src/harness_quota`:
 - `providers/claude.py`, `providers/codex.py`, and `providers/cursor.py` own provider credentials, endpoints, payload extraction, and refresh behavior.
 - `model.py` defines canonical windows and estimation.
 - `auth.py`, `storage.py`, and `transport.py` provide shared boundary utilities.
+- `history.py` records refresh samples and estimates the 30-day window from them.
 - `service.py` dispatches provider refreshes, while `report.py` combines snapshots into the JSON contract.
 - `presentation.py` formats Herdr chips, and `cli.py` handles command parsing and output.
 
@@ -212,6 +219,8 @@ API keys are exchanged for a short-lived dashboard token. Native refresh tokens 
 ## Cache
 
 Snapshots live under `$XDG_CACHE_HOME/herdr-harness-quota`, or `~/.cache/herdr-harness-quota`. The directory uses mode `0700`, snapshot files use mode `0600`, and writes are atomic.
+
+Every successful refresh also appends a sample of all windows to `<provider>.history.jsonl` in the same directory, one JSON object per line. Each write drops samples older than 37 days, which covers the 30-day window plus the oldest overlapping week. History files use mode `0600` and are rewritten atomically. Malformed lines are skipped. Deleting a history file only returns the 30-day estimate to the fallback formula until a new week completes.
 
 ## Development
 

@@ -15,6 +15,25 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).parents[1] / "src"))
 import harness_quota as quota
 
+HOUR = 3600
+DAY = 24 * HOUR
+WEEK = 7 * DAY
+NOW = 555555 * HOUR
+
+
+def weekly_sample(captured_at, used_percent, resets_at, estimated=False):
+    window = {
+        "minutes": 10080,
+        "usedPercent": used_percent,
+        "resetsAt": resets_at,
+        "estimated": estimated,
+    }
+    return {"capturedAt": captured_at, "windows": [window]}
+
+
+def weekly_window(used_percent, resets_at, estimated=False):
+    return weekly_sample(NOW, used_percent, resets_at, estimated)["windows"][0]
+
 
 class QuotaTest(unittest.TestCase):
     def test_extracts_claude_usage_windows(self):
@@ -534,6 +553,246 @@ class QuotaTest(unittest.TestCase):
         self.assertEqual(fetch.call_count, 1)
         self.assertEqual(fetch.call_args.args[0], quota.CURSOR_USAGE_URL)
         self.assertEqual(fetch.call_args.args[1]["Authorization"], "Bearer cursor-token")
+
+    def test_history_estimate_needs_completed_week(self):
+        estimate = quota.history.estimate_monthly_usage
+        current = weekly_window(20, NOW + 5 * DAY)
+
+        self.assertIsNone(estimate([], current, NOW))
+        self.assertIsNone(
+            estimate([weekly_sample(NOW - 32 * DAY, 50, NOW - 31 * DAY)], current, NOW)
+        )
+
+    def test_history_estimate_needs_reported_weekly_reset(self):
+        estimate = quota.history.estimate_monthly_usage
+        samples = [weekly_sample(NOW - 3 * DAY, 70, NOW - 2 * DAY)]
+
+        self.assertIsNone(estimate(samples, weekly_window(20, None), NOW))
+        self.assertIsNone(estimate(samples, weekly_window(20, NOW + 5 * DAY, True), NOW))
+
+    def test_history_estimate_ignores_estimated_weekly_samples(self):
+        samples = [weekly_sample(NOW - 3 * DAY, 70, NOW - 2 * DAY, estimated=True)]
+        current = weekly_window(20, NOW + 5 * DAY)
+
+        self.assertIsNone(quota.history.estimate_monthly_usage(samples, current, NOW))
+
+    def test_history_estimate_ignores_current_week_split_by_reset_jitter(self):
+        resets_at = NOW + 5 * DAY + HOUR // 2
+        samples = [weekly_sample(NOW - HOUR, 10, resets_at - 60)]
+        current = weekly_window(20, resets_at + 60)
+
+        self.assertIsNone(quota.history.estimate_monthly_usage(samples, current, NOW))
+
+    def test_history_estimate_combines_partial_week_with_previous_peak(self):
+        samples = [
+            weekly_sample(NOW - 5 * DAY, 30, NOW - 2 * DAY),
+            weekly_sample(NOW - 3 * DAY, 70, NOW - 2 * DAY),
+        ]
+        current = weekly_window(20, NOW + 5 * DAY)
+
+        self.assertEqual(quota.history.estimate_monthly_usage(samples, current, NOW), 70)
+
+    def test_history_estimate_of_steady_weekly_usage_is_that_usage(self):
+        samples = [
+            weekly_sample(end - DAY, 50, end)
+            for end in (NOW - 3 * DAY - 12 * HOUR - week * WEEK for week in range(5))
+        ]
+        current = weekly_window(25, NOW + 3 * DAY + 12 * HOUR)
+
+        self.assertEqual(quota.history.estimate_monthly_usage(samples, current, NOW), 50)
+
+    def test_history_estimate_weights_week_partly_outside_thirty_days(self):
+        samples = [
+            weekly_sample(NOW - 2 * DAY, 10, NOW - DAY),
+            weekly_sample(NOW - 27 * DAY, 80, NOW - 26 * DAY),
+        ]
+        current = weekly_window(10, NOW + 6 * DAY)
+
+        self.assertEqual(quota.history.estimate_monthly_usage(samples, current, NOW), 38)
+
+    def test_history_estimate_does_not_count_gap_as_unused(self):
+        samples = [weekly_sample(NOW - 16 * DAY, 42, NOW - 15 * DAY)]
+        current = weekly_window(6, NOW + 6 * DAY)
+
+        self.assertEqual(quota.history.estimate_monthly_usage(samples, current, NOW), 42)
+
+    def test_history_estimate_groups_jittering_resets_into_one_week(self):
+        end = NOW - 2 * DAY
+        samples = [
+            weekly_sample(NOW - 4 * DAY, 40, end - 7),
+            weekly_sample(NOW - 3 * DAY, 60, end + 5),
+        ]
+        current = weekly_window(0, NOW + 5 * DAY)
+
+        self.assertEqual(quota.history.estimate_monthly_usage(samples, current, NOW), 47)
+
+    def test_record_snapshot_appends_private_history_samples(self):
+        windows = quota.complete_windows(
+            [
+                {"minutes": 300, "usedPercent": 40},
+                {"minutes": 10080, "usedPercent": 20},
+            ]
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            with patch.dict(os.environ, {"XDG_CACHE_HOME": temporary_directory}):
+                quota.history.record_snapshot("claude", windows)
+                quota.history.record_snapshot("claude", windows)
+                path = quota.history.history_path("claude")
+                mode = stat.S_IMODE(path.stat().st_mode)
+                samples = [json.loads(line) for line in path.read_text().splitlines()]
+
+        self.assertEqual(mode, 0o600)
+        self.assertEqual(len(samples), 2)
+        self.assertTrue(all(isinstance(sample["capturedAt"], int) for sample in samples))
+        self.assertTrue(all(sample["windows"] == windows for sample in samples))
+
+    def test_record_snapshot_prunes_old_and_malformed_history(self):
+        now = int(time.time())
+        kept = weekly_sample(now - 36 * DAY, 50, now - 35 * DAY)
+        lines = [
+            json.dumps(weekly_sample(now - 38 * DAY, 50, now - 37 * DAY)),
+            "not json",
+            "[]",
+            json.dumps({"capturedAt": "yesterday", "windows": []}),
+            json.dumps(kept),
+        ]
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            with patch.dict(os.environ, {"XDG_CACHE_HOME": temporary_directory}):
+                path = quota.history.history_path("codex")
+                path.write_text("\n".join(lines) + "\n")
+                quota.history.record_snapshot(
+                    "codex", quota.complete_windows([{"minutes": 300, "usedPercent": 10}])
+                )
+                samples = [json.loads(line) for line in path.read_text().splitlines()]
+
+        self.assertEqual(len(samples), 2)
+        self.assertEqual(samples[0], kept)
+        self.assertGreaterEqual(samples[1]["capturedAt"], now)
+
+    def test_record_snapshot_ignores_symlinked_history(self):
+        now = int(time.time())
+        windows = quota.complete_windows(
+            [
+                {"minutes": 300, "usedPercent": 40},
+                {"minutes": 10080, "usedPercent": 20, "resetsAt": now + 5 * DAY},
+            ]
+        )
+        sample = weekly_sample(now - 3 * DAY, 70, now - 2 * DAY)
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            target = Path(temporary_directory) / "outside.jsonl"
+            target.write_text(json.dumps(sample) + "\n")
+            cache_home = Path(temporary_directory) / "cache"
+            with patch.dict(os.environ, {"XDG_CACHE_HOME": str(cache_home)}):
+                quota.history.history_path("claude").symlink_to(target)
+                quota.history.record_snapshot("claude", windows)
+                monthly_window = quota.read_snapshot("claude")["windows"][2]
+            target_text = target.read_text()
+
+        self.assertEqual(monthly_window["usedPercent"], 26)
+        self.assertEqual(target_text, json.dumps(sample) + "\n")
+
+    def test_read_snapshot_ignores_symlinked_snapshot(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            with patch.dict(os.environ, {"XDG_CACHE_HOME": temporary_directory}):
+                quota.write_snapshot("cursor", [{"minutes": 43200, "usedPercent": 7}])
+                path = quota.snapshot_path("cursor")
+                target = path.with_name("target.json")
+                path.rename(target)
+                path.symlink_to(target)
+
+                self.assertIsNone(quota.read_snapshot("cursor"))
+
+    def test_read_private_file_requires_current_owner(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "cache.json"
+            path.write_text("{}")
+            with patch.object(os, "getuid", return_value=os.getuid() + 1):
+                foreign_text = quota.storage.read_private_file(path)
+            own_text = quota.storage.read_private_file(path)
+
+        self.assertIsNone(foreign_text)
+        self.assertEqual(own_text, "{}")
+
+    def test_snapshot_uses_history_estimate_for_thirty_days(self):
+        now = int(time.time())
+        windows = quota.complete_windows(
+            [
+                {"minutes": 300, "usedPercent": 40},
+                {"minutes": 10080, "usedPercent": 20, "resetsAt": now + 5 * DAY},
+            ]
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            with patch.dict(os.environ, {"XDG_CACHE_HOME": temporary_directory}):
+                quota.history.record_snapshot("claude", windows)
+                formula_window = quota.read_snapshot("claude")["windows"][2]
+
+                sample = weekly_sample(now - 3 * DAY, 70, now - 2 * DAY)
+                quota.history.history_path("claude").write_text(json.dumps(sample) + "\n")
+                quota.history.record_snapshot("claude", windows)
+                history_window = quota.read_snapshot("claude")["windows"][2]
+
+        self.assertEqual(
+            formula_window,
+            {"minutes": 43200, "usedPercent": 26, "resetsAt": None, "estimated": True},
+        )
+        self.assertEqual(
+            history_window,
+            {"minutes": 43200, "usedPercent": 70, "resetsAt": None, "estimated": True},
+        )
+
+    def test_record_snapshot_skips_unusable_history_values(self):
+        now = int(time.time())
+        windows = quota.complete_windows(
+            [
+                {"minutes": 300, "usedPercent": 40},
+                {"minutes": 10080, "usedPercent": 20, "resetsAt": now + 5 * DAY},
+            ]
+        )
+        resets_at = now - 2 * DAY
+        valid = weekly_sample(now - 3 * DAY, 70, resets_at)
+        window_line = (
+            '{{"capturedAt":{captured_at},"windows":[{{"minutes":10080,'
+            '"usedPercent":{used},"resetsAt":{resets_at},"estimated":false}}]}}'
+        )
+        lines = [
+            json.dumps(valid),
+            window_line.format(captured_at=now - 3 * DAY, used="NaN", resets_at=resets_at),
+            window_line.format(captured_at=now - 3 * DAY, used="Infinity", resets_at=resets_at),
+            window_line.format(captured_at=now - 3 * DAY, used="9" * 400, resets_at=resets_at),
+            window_line.format(captured_at=now - 3 * DAY, used=90, resets_at="9" * 400),
+            window_line.format(captured_at=now - 3 * DAY, used="9" * 5000, resets_at=resets_at),
+            "[" * 100000 + "]" * 100000,
+        ]
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            with patch.dict(os.environ, {"XDG_CACHE_HOME": temporary_directory}):
+                path = quota.history.history_path("claude")
+                path.write_text("\n".join(lines) + "\n")
+                quota.history.record_snapshot("claude", windows)
+                monthly_window = quota.read_snapshot("claude")["windows"][2]
+                history_lines = path.read_text().splitlines()
+
+        self.assertEqual(monthly_window["usedPercent"], 70)
+        self.assertEqual(json.loads(history_lines[0]), valid)
+
+    def test_cursor_snapshot_keeps_reported_thirty_days(self):
+        now = int(time.time())
+        windows = quota.complete_windows(
+            [
+                {"minutes": 300, "usedPercent": 10, "estimated": True},
+                {"minutes": 10080, "usedPercent": 20, "resetsAt": now + DAY, "estimated": True},
+                {"minutes": 43200, "usedPercent": 30, "resetsAt": now + DAY},
+            ]
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            with patch.dict(os.environ, {"XDG_CACHE_HOME": temporary_directory}):
+                sample = weekly_sample(now - 3 * DAY, 90, now - 2 * DAY)
+                quota.history.history_path("cursor").write_text(json.dumps(sample) + "\n")
+                quota.history.record_snapshot("cursor", windows)
+                snapshot = quota.read_snapshot("cursor")
+                history_lines = quota.history.history_path("cursor").read_text().splitlines()
+
+        self.assertEqual(snapshot["windows"], windows)
+        self.assertEqual(len(history_lines), 2)
 
 
 if __name__ == "__main__":
