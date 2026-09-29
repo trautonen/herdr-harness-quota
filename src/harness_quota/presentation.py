@@ -21,7 +21,7 @@ def window_label(minutes: int) -> str:
     return f"{minutes}m"
 
 
-def format_chip(provider: str, snapshot: dict[str, Any] | None) -> str:
+def format_chip(provider: str, snapshot: dict[str, Any] | None, stale: bool = False) -> str:
     if snapshot is None:
         return ""
     parts = []
@@ -35,4 +35,5 @@ def format_chip(provider: str, snapshot: dict[str, Any] | None) -> str:
         warning = "!" if remaining < 20 else ""
         label = "" if provider == "cursor" and len(windows) == 1 else window_label(minutes)
         parts.append(f"{label}{remaining}%{warning}")
-    return f"{LABELS[provider]} {' '.join(parts)}" if parts else ""
+    marker = "?" if stale else ""
+    return f"{LABELS[provider]}{marker} {' '.join(parts)}" if parts else ""
