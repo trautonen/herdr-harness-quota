@@ -626,6 +626,16 @@ class QuotaTest(unittest.TestCase):
 
         self.assertEqual(quota.history.estimate_monthly_usage(samples, current, NOW), 47)
 
+    def test_history_estimate_counts_completed_week_split_by_reset_jitter_once(self):
+        end = NOW - 2 * DAY + HOUR // 2
+        samples = [
+            weekly_sample(NOW - 4 * DAY, 10, end - 5),
+            weekly_sample(NOW - 3 * DAY, 60, end + 5),
+        ]
+        current = weekly_window(0, NOW + 5 * DAY)
+
+        self.assertEqual(quota.history.estimate_monthly_usage(samples, current, NOW), 47)
+
     def test_record_snapshot_appends_private_history_samples(self):
         windows = quota.complete_windows(
             [

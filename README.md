@@ -14,7 +14,7 @@ Every available provider has three ordered windows:
 | 10080 | 1 week |
 | 43200 | 30 days |
 
-Claude and Codex do not report a 30-day window, so it is estimated from the recorded weekly usage in the [cache](#cache). A weekly period is identified by its reset time rounded to the hour. The estimate uses the current week and the peak of every completed week that ended within the last 30 days. Each completed week is weighted by how much of it falls inside those 30 days:
+Claude and Codex do not report a 30-day window, so it is estimated from the recorded weekly usage in the [cache](#cache). Samples whose weekly reset times lie within a day of each other belong to the same weekly period. The estimate uses the current week and the peak of every completed week that ended within the last 30 days. Each completed week is weighted by how much of it falls inside those 30 days:
 
 ```text
 round((current weekly usedPercent + Σ peak × overlap) × 7 days / (current week elapsed + Σ overlap × 7 days))
