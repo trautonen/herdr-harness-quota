@@ -173,6 +173,8 @@ herdr-harness-quota details
 
 Tab-bar reads return cached data immediately and start a detached refresh after 15 minutes. Override the interval with `herdr-harness-quota chip PROVIDER --refresh-after SECONDS`.
 
+A chip keeps showing the last cached quota while a refresh runs or fails. Once the snapshot is older than `--max-age` (default 3600 seconds), the provider label gets a `?` marker, for example `cx? 5h92% 1w89% 30d90%`. Set the threshold with `herdr-harness-quota chip PROVIDER --max-age SECONDS` or `herdr-harness-quota details --max-age SECONDS`. `details` shows the cached quota, its age in seconds, and the same marker on the provider name. A chip prints nothing, and `details` reports unavailable, when no readable snapshot exists or the snapshot holds no usable quota window.
+
 ## Credentials
 
 The CLI reads existing provider credentials and never includes tokens in cache or output.

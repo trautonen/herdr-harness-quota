@@ -111,6 +111,7 @@ class QuotaTest(unittest.TestCase):
         }
 
         self.assertEqual(quota.format_chip("claude", snapshot), "cl 5h19%! 1w82%")
+        self.assertEqual(quota.format_chip("claude", snapshot, stale=True), "cl? 5h19%! 1w82%")
 
     def test_omits_missing_windows(self):
         snapshot = {"windows": [{"minutes": 300, "usedPercent": 42}]}
@@ -154,12 +155,114 @@ class QuotaTest(unittest.TestCase):
         self.assertEqual(report_arguments.stale_after, 900)
         self.assertEqual(chip_arguments.refresh_after, 900)
 
+    def test_stale_marker_threshold_defaults_to_one_hour(self):
+        chip_arguments = quota.parser().parse_args(["chip", "claude"])
+        details_arguments = quota.parser().parse_args(["details"])
+
+        self.assertEqual(chip_arguments.max_age, 3600)
+        self.assertEqual(details_arguments.max_age, 3600)
+
+    def test_stale_marker_threshold_rejects_negative_values(self):
+        for arguments in (["chip", "claude", "--max-age", "-1"], ["details", "--max-age", "-1"]):
+            errors = io.StringIO()
+            with redirect_stderr(errors), self.assertRaises(SystemExit):
+                quota.parser().parse_args(arguments)
+
+            self.assertIn("must be zero or greater", errors.getvalue())
+
     def test_refresh_interval_can_be_overridden(self):
         report_arguments = quota.parser().parse_args(["--stale-after", "120"])
         chip_arguments = quota.parser().parse_args(["chip", "claude", "--refresh-after", "300"])
 
         self.assertEqual(report_arguments.stale_after, 120)
         self.assertEqual(chip_arguments.refresh_after, 300)
+
+    def test_chip_shows_snapshot_past_refresh_interval_without_marker(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            with patch.dict(os.environ, {"XDG_CACHE_HOME": temporary_directory}):
+                quota.write_snapshot("codex", [{"minutes": 300, "usedPercent": 42}])
+                path = quota.snapshot_path("codex")
+                payload = json.loads(path.read_text())
+                payload["capturedAt"] = int(time.time()) - 1000
+                path.write_text(json.dumps(payload))
+                output = io.StringIO()
+                with patch.object(quota.cli, "refresh_in_background") as refresh:
+                    with redirect_stdout(output):
+                        exit_code = quota.main(["chip", "codex"])
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(output.getvalue(), "cx 5h58%\n")
+        refresh.assert_called_once_with("codex")
+
+    def test_chip_marks_snapshot_older_than_max_age(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            with patch.dict(os.environ, {"XDG_CACHE_HOME": temporary_directory}):
+                quota.write_snapshot("codex", [{"minutes": 300, "usedPercent": 42}])
+                path = quota.snapshot_path("codex")
+                payload = json.loads(path.read_text())
+                payload["capturedAt"] = int(time.time()) - 4000
+                path.write_text(json.dumps(payload))
+                output = io.StringIO()
+                with patch.object(quota.cli, "refresh_in_background") as refresh:
+                    with redirect_stdout(output):
+                        exit_code = quota.main(["chip", "codex"])
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(output.getvalue(), "cx? 5h58%\n")
+        refresh.assert_called_once_with("codex")
+
+    def test_stale_marker_appears_only_after_max_age(self):
+        outputs = {}
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            with patch.dict(os.environ, {"XDG_CACHE_HOME": temporary_directory}):
+                with patch("time.time", return_value=1_000_000):
+                    quota.write_snapshot("codex", [{"minutes": 300, "usedPercent": 42}])
+                for age in (600, 601):
+                    chip_output = io.StringIO()
+                    details_output = io.StringIO()
+                    with patch("time.time", return_value=1_000_000 + age):
+                        with patch.object(quota.cli, "refresh_in_background"):
+                            with redirect_stdout(chip_output):
+                                quota.main(["chip", "codex", "--max-age", "600"])
+                            with redirect_stdout(details_output):
+                                quota.main(["details", "--max-age", "600"])
+                    outputs[age] = (
+                        chip_output.getvalue(),
+                        details_output.getvalue().splitlines()[1],
+                    )
+
+        self.assertEqual(outputs[600], ("cx 5h58%\n", "Codex   5h58%  (600s old)"))
+        self.assertEqual(outputs[601], ("cx? 5h58%\n", "Codex?  5h58%  (601s old)"))
+
+    def test_chip_without_snapshot_prints_nothing_and_refreshes(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            with patch.dict(os.environ, {"XDG_CACHE_HOME": temporary_directory}):
+                output = io.StringIO()
+                with patch.object(quota.cli, "refresh_in_background") as refresh:
+                    with redirect_stdout(output):
+                        exit_code = quota.main(["chip", "cursor"])
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(output.getvalue(), "\n")
+        refresh.assert_called_once_with("cursor")
+
+    def test_details_shows_old_snapshot_with_marker(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            with patch.dict(os.environ, {"XDG_CACHE_HOME": temporary_directory}):
+                with patch("time.time", return_value=1_000_000):
+                    quota.write_snapshot("claude", [{"minutes": 300, "usedPercent": 42}])
+                with patch("time.time", return_value=1_003_955):
+                    quota.write_snapshot("codex", [{"minutes": 300, "usedPercent": 10}])
+                output = io.StringIO()
+                with patch("time.time", return_value=1_004_000):
+                    with redirect_stdout(output):
+                        exit_code = quota.main(["details"])
+
+        lines = output.getvalue().splitlines()
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(lines[0], "Claude? 5h58%  (4000s old)")
+        self.assertEqual(lines[1], "Codex   5h90%  (45s old)")
+        self.assertEqual(lines[2], "Cursor  unavailable")
 
     def test_default_cli_returns_all_providers_as_json(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

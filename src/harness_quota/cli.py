@@ -5,22 +5,28 @@ import json
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
-from .config import DEFAULT_MAX_AGE, DEFAULT_REFRESH_INTERVAL, PROVIDERS, VERSION
+from .config import DEFAULT_REFRESH_INTERVAL, DEFAULT_STALE_MARKER_AGE, PROVIDERS, VERSION
 from .presentation import format_chip
 from .report import build_report
 from .service import refresh_in_background, refresh_provider
 from .storage import cache_directory, read_snapshot
 
 
+def snapshot_age(snapshot: dict[str, Any]) -> int:
+    return int(time.time()) - int(snapshot["capturedAt"])
+
+
 def cmd_chip(provider: str, max_age: int, refresh_after: int) -> int:
     providers = PROVIDERS if provider == "all" else (provider,)
     chips = []
     for current_provider in providers:
-        snapshot = read_snapshot(current_provider, max_age)
+        snapshot = read_snapshot(current_provider, max_age=None)
         if read_snapshot(current_provider, refresh_after) is None:
             refresh_in_background(current_provider)
-        chip = format_chip(current_provider, snapshot)
+        stale = snapshot is not None and snapshot_age(snapshot) > max_age
+        chip = format_chip(current_provider, snapshot, stale=stale)
         if chip:
             chips.append(chip)
     print("  ".join(chips))
@@ -61,13 +67,14 @@ def cmd_refresh(provider: str, timeout: float) -> int:
 def cmd_details(max_age: int) -> int:
     lines = []
     for provider in PROVIDERS:
-        snapshot = read_snapshot(provider, max_age)
+        snapshot = read_snapshot(provider, max_age=None)
         chip = format_chip(provider, snapshot)
         if chip:
-            age = int(time.time()) - int(snapshot["capturedAt"])
-            lines.append(f"{provider.capitalize():6} {chip[3:]}  ({age}s old)")
+            age = snapshot_age(snapshot)
+            name = provider.capitalize() + ("?" if age > max_age else "")
+            lines.append(f"{name:7} {chip[3:]}  ({age}s old)")
         else:
-            lines.append(f"{provider.capitalize():6} unavailable")
+            lines.append(f"{provider.capitalize():7} unavailable")
     print("\n".join(lines))
     return 0
 
@@ -110,7 +117,7 @@ def parser() -> argparse.ArgumentParser:
 
     chip = subparsers.add_parser("chip", help="print compact quota text")
     chip.add_argument("provider", choices=(*PROVIDERS, "all"))
-    chip.add_argument("--max-age", type=nonnegative_integer, default=DEFAULT_MAX_AGE)
+    chip.add_argument("--max-age", type=nonnegative_integer, default=DEFAULT_STALE_MARKER_AGE)
     chip.add_argument("--refresh-after", type=nonnegative_integer, default=DEFAULT_REFRESH_INTERVAL)
 
     refresh = subparsers.add_parser("refresh", help="fetch current quota")
@@ -118,7 +125,7 @@ def parser() -> argparse.ArgumentParser:
     refresh.add_argument("--timeout", type=float, default=12.0)
 
     details = subparsers.add_parser("details", help="print current quota details")
-    details.add_argument("--max-age", type=int, default=DEFAULT_MAX_AGE)
+    details.add_argument("--max-age", type=nonnegative_integer, default=DEFAULT_STALE_MARKER_AGE)
 
     return argument_parser
 
