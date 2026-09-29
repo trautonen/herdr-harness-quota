@@ -4,6 +4,81 @@ Harness Quota reads Claude, Codex, and Cursor subscription usage and converts it
 
 The provider usage endpoints are first-party but are not documented as public APIs. Their paths and response formats can change.
 
+## Installation
+
+Python 3.10 or newer is required. The runtime has no third-party dependencies. The commands below install the latest release. Replace the tag to install another version.
+
+### Standalone CLI
+
+<!-- x-release-please-start-version -->
+
+```bash
+uv tool install git+https://github.com/trautonen/herdr-harness-quota.git@v0.2.0
+```
+
+<!-- x-release-please-end -->
+
+From a checkout:
+
+```bash
+uv tool install .
+```
+
+### Claude Code marketplace
+
+The repository contains a Claude Code plugin and marketplace manifest. Install it with:
+
+```bash
+claude plugin marketplace add trautonen/herdr-harness-quota
+claude plugin install harness-quota@trautonen-tools
+```
+
+The marketplace follows the default branch, not a release tag.
+
+Claude Code adds the plugin's `bin` directory to its Bash-tool `PATH`, so agents can invoke `harness-quota` without a symlink or global installation.
+
+### Pi package
+
+<!-- x-release-please-start-version -->
+
+```bash
+pi install git:github.com/trautonen/herdr-harness-quota@v0.2.0
+```
+
+<!-- x-release-please-end -->
+
+The package contains a portable `harness-quota` skill. Invoke it explicitly with:
+
+```text
+/skill:harness-quota
+```
+
+The skill runs its bundled wrapper relative to `SKILL.md`, so it does not require a symlink.
+
+### Herdr plugin
+
+Install the plugin from GitHub:
+
+<!-- x-release-please-start-version -->
+
+```bash
+herdr plugin install trautonen/herdr-harness-quota --ref v0.2.0
+```
+
+<!-- x-release-please-end -->
+
+Or link a checkout:
+
+```bash
+herdr plugin link /path/to/herdr-harness-quota
+```
+
+The plugin adds the actions `Quota: refresh all` and `Quota: show details`. To show quota chips in the tab bar, add the command entries from [`examples/herdr-config.toml`](examples/herdr-config.toml) to the Herdr configuration. Replace `/path/to/herdr-harness-quota` in each entry with the checkout path or the installed plugin root, which `herdr plugin list --json` reports as `plugin_root`. Tab-bar commands do not receive `$HERDR_PLUGIN_ROOT`, so the path must be absolute.
+
+Tab-bar reads return cached data immediately and start a detached refresh after 15 minutes. Override the interval with `herdr-harness-quota chip PROVIDER --refresh-after SECONDS`.
+
+A chip keeps showing the last cached quota while a refresh runs or fails. Once the snapshot is older than `--max-age` (default 3600 seconds), the provider label gets a `?` marker, for example `cx? 5h92% 1w89% 30d90%`. Set the threshold with `herdr-harness-quota chip PROVIDER --max-age SECONDS` or `herdr-harness-quota details --max-age SECONDS`. `details` shows the cached quota, its age in seconds, and the same marker on the provider name. A chip prints nothing, and `details` reports unavailable, when no readable snapshot exists or the snapshot holds no usable quota window.
+
 ## Unified model
 
 Every available provider has three ordered windows:
@@ -82,24 +157,22 @@ Example complete response:
 
 Remaining quota is `100 - usedPercent`.
 
-## Architecture
-
-The Python source is a package under `src/harness_quota`:
-
-- `providers/claude.py`, `providers/codex.py`, and `providers/cursor.py` own provider credentials, endpoints, payload extraction, and refresh behavior.
-- `model.py` defines canonical windows and estimation.
-- `auth.py`, `storage.py`, and `transport.py` provide shared boundary utilities.
-- `history.py` records refresh samples and estimates the 30-day window from them.
-- `service.py` dispatches provider refreshes, while `report.py` combines snapshots into the JSON contract.
-- `presentation.py` formats Herdr chips, and `cli.py` handles command parsing and output.
-
-Provider modules do not depend on the CLI or report layer. New providers can implement a refresh adapter and register it in `service.py` without changing the normalized model.
-
 ## CLI
 
 ```text
 harness-quota [options]
+harness-quota chip claude|codex|cursor|all [--max-age SECONDS] [--refresh-after SECONDS]
+harness-quota refresh claude|codex|cursor|all [--timeout SECONDS]
+harness-quota details [--max-age SECONDS]
+```
 
+`herdr-harness-quota` in `bin` is the same command. The Herdr configuration uses that name.
+
+### JSON report
+
+Without a subcommand, `harness-quota` prints the JSON report described in [Unified model](#unified-model).
+
+```text
 -p, --provider all|claude|codex|cursor
 --refresh stale|always|never
 --stale-after SECONDS
@@ -107,6 +180,7 @@ harness-quota [options]
 --pretty
 --require-all
 --version
+-h, --help
 ```
 
 Defaults are all providers, `--refresh stale`, a 15-minute refresh interval, and a 12-second timeout per provider. Use `--stale-after SECONDS` to change the JSON command's interval. Refreshes run concurrently. A valid report exits successfully even when a provider is unavailable. `--require-all` returns exit status 1 unless every requested provider is current.
@@ -119,68 +193,28 @@ harness-quota --provider claude --refresh always
 harness-quota --refresh never
 ```
 
-## Install the standalone CLI
+### Herdr commands
 
-Python 3.10 or newer is required. The runtime has no third-party dependencies.
+`chip PROVIDER` prints compact quota text for the Herdr tab bar. `all` prints every provider on one line. `--max-age SECONDS` sets the stale marker threshold (default 3600), and `--refresh-after SECONDS` sets the refresh interval (default 900).
 
-From a checkout:
+`refresh PROVIDER` fetches current quota for one provider or `all` and updates the cache. `--timeout SECONDS` sets the timeout per provider (default 12). It exits with status 1 when any provider fails.
 
-```bash
-uv tool install .
-```
+`details` prints cached quota and its age. `--max-age SECONDS` sets the stale marker threshold (default 3600).
 
-From Git after publication:
+Refresh and cache failures return status 1. Every command exits with status 2 on invalid arguments.
 
-```bash
-uv tool install git+https://github.com/trautonen/herdr-harness-quota.git
-```
+## Architecture
 
-## Claude Code marketplace
+The Python source is a package under `src/harness_quota`:
 
-The repository contains a Claude Code plugin and marketplace manifest. After the repository is published, install it with:
+- `providers/claude.py`, `providers/codex.py`, and `providers/cursor.py` own provider credentials, endpoints, payload extraction, and refresh behavior.
+- `model.py` defines canonical windows and estimation.
+- `auth.py`, `storage.py`, and `transport.py` provide shared boundary utilities.
+- `history.py` records refresh samples and estimates the 30-day window from them.
+- `service.py` dispatches provider refreshes, while `report.py` combines snapshots into the JSON contract.
+- `presentation.py` formats Herdr chips, and `cli.py` handles command parsing and output.
 
-```bash
-claude plugin marketplace add trautonen/herdr-harness-quota
-claude plugin install harness-quota@trautonen-tools
-```
-
-Claude Code adds the plugin's `bin` directory to its Bash-tool `PATH`, so agents can invoke `harness-quota` without a symlink or global installation.
-
-## Pi package
-
-Install directly from a tagged Git release:
-
-```bash
-pi install git:github.com/trautonen/herdr-harness-quota@v0.2.0
-```
-
-The package contains a portable `harness-quota` skill. Invoke it explicitly with:
-
-```text
-/skill:harness-quota
-```
-
-The skill runs its bundled wrapper relative to `SKILL.md`, so it does not require a symlink. The `pi-package` keyword also makes a future npm publication eligible for the Pi package gallery.
-
-## Herdr plugin
-
-Link the checkout:
-
-```bash
-herdr plugin link /path/to/herdr-harness-quota
-```
-
-Add the command entries from [`examples/herdr-config.toml`](examples/herdr-config.toml) to the Herdr configuration. Existing commands remain available:
-
-```text
-herdr-harness-quota chip claude|codex|cursor|all
-herdr-harness-quota refresh claude|codex|cursor|all
-herdr-harness-quota details
-```
-
-Tab-bar reads return cached data immediately and start a detached refresh after 15 minutes. Override the interval with `herdr-harness-quota chip PROVIDER --refresh-after SECONDS`.
-
-A chip keeps showing the last cached quota while a refresh runs or fails. Once the snapshot is older than `--max-age` (default 3600 seconds), the provider label gets a `?` marker, for example `cx? 5h92% 1w89% 30d90%`. Set the threshold with `herdr-harness-quota chip PROVIDER --max-age SECONDS` or `herdr-harness-quota details --max-age SECONDS`. `details` shows the cached quota, its age in seconds, and the same marker on the provider name. A chip prints nothing, and `details` reports unavailable, when no readable snapshot exists or the snapshot holds no usable quota window.
+Provider modules do not depend on the CLI or report layer. New providers can implement a refresh adapter and register it in `service.py` without changing the normalized model.
 
 ## Credentials
 
@@ -226,17 +260,42 @@ Every successful refresh also appends a sample of all windows to `<provider>.his
 
 ## Development
 
+The checks match the CI workflow. `uv run` creates a virtual environment with the `dev` extra:
+
 ```bash
-python3 -m pip install -e ".[dev]"
-ruff check src tests
-black --check src tests
-python3 -m unittest discover -s tests -v
-python3 -m compileall -q src
+uv run --extra dev ruff check src tests
+uv run --extra dev black --check src tests
+uv run --extra dev python -m unittest discover -s tests -v
+uv run --extra dev python -m compileall -q src
 shellcheck bin/harness-quota bin/herdr-harness-quota skills/harness-quota/scripts/harness-quota
-claude plugin validate .
+npm pack --dry-run
 ```
 
-Run `black src tests` to format the Python source.
+Run `uv run --extra dev black src tests` to format the Python source. `claude plugin validate .` checks the Claude Code plugin manifest.
+
+## Releasing
+
+[release-please](https://github.com/googleapis/release-please) derives versions from [Conventional Commits](https://www.conventionalcommits.org/) on `main`. Pull requests are squash-merged, and the pull request title becomes the commit message that release-please reads. The title prefix therefore decides the version bump:
+
+| Title | Before 1.0 | From 1.0 |
+|---|---|---|
+| `fix: ...` | patch | patch |
+| `feat: ...` | minor | minor |
+| `feat!: ...` or `fix!: ...` | minor | major |
+
+Other prefixes such as `docs:`, `chore:`, `refactor:`, and `test:` do not trigger a release. The squash commit has an empty body, so a `BREAKING CHANGE` footer in a commit or pull request description does not reach `main`. Mark a breaking change with `!` in the title.
+
+A change is breaking when it changes the public interface in an incompatible way:
+
+- the JSON report and its `schemaVersion`
+- CLI flags and exit codes
+- the chip text format
+- the cache and history file formats
+- environment variables
+
+Update the README in the same pull request as any user-visible change.
+
+After each push to `main`, release-please keeps a release pull request open. It updates `CHANGELOG.md` and every version declaration. The repository must enable **Allow GitHub Actions to create and approve pull requests** under Settings > Actions > General, because the release workflow opens the pull request with its `GITHUB_TOKEN`. Without this setting, no release pull request, tag, or GitHub release appears. Merging the release pull request tags the commit `vX.Y.Z` and publishes the GitHub release. The release pull request shows no CI checks, because pull requests created with the workflow's `GITHUB_TOKEN` do not trigger workflows.
 
 ## License
 
