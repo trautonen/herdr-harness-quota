@@ -1,59 +1,18 @@
 # Harness Quota
 
-Harness Quota reads Claude, Codex, and Cursor subscription usage and converts it to one JSON model for scripts and routing. It also provides compact Herdr tab-bar output.
+![Herdr tab bar with Claude, Codex and Cursor quota chips above a coding agent working on this repository](docs/herdr-tab-bar.png)
+
+The tab bar shows remaining quota while an agent works in the pane below.
+
+Harness Quota shows Claude, Codex, and Cursor quota in the Herdr tab bar. The chips show three windows per provider, with two spaces between providers: `cl 5h88% 1w79% 30d82%  cx 5h98% 1w87% 30d90%  cr 5h100% 1w100% 30d100%`.
+
+It also provides a JSON CLI for scripts and routing, a Claude Code marketplace plugin, and a Pi package.
 
 The provider usage endpoints are first-party but are not documented as public APIs. Their paths and response formats can change.
 
-## Installation
-
 Python 3.10 or newer is required. The runtime has no third-party dependencies. The commands below install the latest release. Replace the tag to install another version.
 
-### Standalone CLI
-
-<!-- x-release-please-start-version -->
-
-```bash
-uv tool install git+https://github.com/trautonen/herdr-harness-quota.git@v0.3.0
-```
-
-<!-- x-release-please-end -->
-
-From a checkout:
-
-```bash
-uv tool install .
-```
-
-### Claude Code marketplace
-
-The repository contains a Claude Code plugin and marketplace manifest. Install it with:
-
-```bash
-claude plugin marketplace add trautonen/herdr-harness-quota
-claude plugin install harness-quota@trautonen-tools
-```
-
-The marketplace installs the plugin from the latest release tag. Users receive a new release when they run `claude plugin update harness-quota@trautonen-tools` or turn on auto-update for the marketplace in `/plugin`.
-
-Claude Code adds the plugin's `bin` directory to its Bash-tool `PATH`, so agents can invoke `harness-quota` without a symlink or global installation.
-
-### Pi package
-
-<!-- x-release-please-start-version -->
-
-```bash
-pi install git:github.com/trautonen/herdr-harness-quota@v0.3.0
-```
-
-<!-- x-release-please-end -->
-
-The package contains a portable `harness-quota` skill. Invoke it explicitly with:
-
-```text
-/skill:harness-quota
-```
-
-The skill runs its bundled wrapper relative to `SKILL.md`, so it does not require a symlink.
+## Herdr tab bar
 
 ### Herdr plugin
 
@@ -73,33 +32,39 @@ Or link a checkout:
 herdr plugin link /path/to/herdr-harness-quota
 ```
 
-The plugin adds the actions `Quota: refresh all` and `Quota: show details`. To show quota chips in the tab bar, add the command entries from [`examples/herdr-config.toml`](examples/herdr-config.toml) to the Herdr configuration. Replace `/path/to/herdr-harness-quota` in each entry with the checkout path or the installed plugin root, which `herdr plugin list --json` reports as `plugin_root`. Tab-bar commands do not receive `$HERDR_PLUGIN_ROOT`, so the path must be absolute.
+### Tab-bar configuration
 
-[Herdr commands](#herdr-commands) describes what the chips show, when they refresh, and how to change the intervals.
+To show quota chips in the tab bar, add the command entries from [`examples/herdr-config.toml`](examples/herdr-config.toml) to the Herdr configuration. Replace `/path/to/herdr-harness-quota` in each entry with the checkout path or the installed plugin root, which `herdr plugin list --json` reports as `plugin_root`. Tab-bar commands do not receive `$HERDR_PLUGIN_ROOT`, so the path must be absolute. The example runs each chip every 30 seconds with a 2-second timeout and separates the chips with two spaces.
 
-## Unified model
+### Reading a chip
 
-Every available provider has three ordered windows:
+`cl`, `cx`, and `cr` stand for Claude, Codex, and Cursor. The `5h`, `1w`, and `30d` windows show the percent remaining, not the percent used. A trailing `!` marks a window with less than 20% remaining. A `?` after the provider label means the cached snapshot is older than `--max-age` (one hour by default). An empty chip means no readable snapshot or no usable quota window. See [Unified model](#unified-model) for how the 30-day and Cursor windows are estimated.
 
-| Minutes | Window |
-|---:|---|
-| 300 | 5 hours |
-| 10080 | 1 week |
-| 43200 | 30 days |
+### Refresh and details
 
-Claude and Codex do not report a 30-day window, so it is estimated from the recorded weekly usage in the [cache](#cache). Samples whose weekly reset times lie within a day of each other belong to the same weekly period. The estimate uses the current week and the peak of every completed week that ended within the last 30 days. Each completed week is weighted by how much of it falls inside those 30 days:
+Chips read the cache and return immediately. When a snapshot is missing or older than 15 minutes, a chip starts a detached refresh and keeps showing the last cached quota while the refresh runs or fails. The `Quota: refresh all` action runs `refresh all` to update the cache. The `Quota: show details` action opens the `Harness quota` overlay pane, which runs `details`, shows each provider with the age of its snapshot, and waits for Enter to close.
 
-```text
-round((current weekly usedPercent + Σ peak × overlap) × 7 days / (current week elapsed + Σ overlap × 7 days))
+[Herdr commands](#herdr-commands) describes the command reference and how to change the intervals.
+
+## Other uses
+
+### Standalone CLI
+
+<!-- x-release-please-start-version -->
+
+```bash
+uv tool install git+https://github.com/trautonen/herdr-harness-quota.git@v0.3.0
 ```
 
-Weeks without recorded samples are left out, so a gap in the history does not count as zero usage. A steady 50% per week gives 50%. Until a completed week is recorded, or when the weekly window has no reset time, the 30-day value falls back to:
+<!-- x-release-please-end -->
 
-```text
-round(5-hour usedPercent × 0.30 + weekly usedPercent × 0.70)
+From a checkout:
+
+```bash
+uv tool install .
 ```
 
-Cursor's Auto and API allowances map to the synthetic 5-hour and weekly windows. These values have `estimated: true`. Cursor's reported total allowance maps to 30 days. When another canonical window is missing, the estimate uses 30% of the shortest reported window and 70% of the longest. A single reported value is copied to missing windows. Every synthesized value is marked as estimated.
+Harness Quota reads Claude, Codex, and Cursor subscription usage and converts it to one JSON model for scripts and routing.
 
 Run without a subcommand to get all providers as JSON:
 
@@ -155,6 +120,71 @@ Example complete response:
 
 Remaining quota is `100 - usedPercent`.
 
+See [JSON report](#json-report) for options and [Unified model](#unified-model) for windows and estimation.
+
+### Claude Code marketplace
+
+The repository contains a Claude Code plugin and marketplace manifest. Install it with:
+
+```bash
+claude plugin marketplace add trautonen/herdr-harness-quota
+claude plugin install harness-quota@herdr-harness-quota
+```
+
+The marketplace installs the plugin from the latest release tag. Users receive a new release when they run `claude plugin update harness-quota@herdr-harness-quota` or turn on auto-update for the marketplace in `/plugin`.
+
+If you installed version 0.3.0 from the marketplace, your plugin id is `harness-quota@trautonen-tools`. The marketplace is named `herdr-harness-quota` in later releases, so updates do not reach that id. Remove the old marketplace, which also uninstalls the plugin, and then add the marketplace and install the plugin again:
+
+```bash
+claude plugin marketplace remove trautonen-tools
+claude plugin marketplace add trautonen/herdr-harness-quota
+claude plugin install harness-quota@herdr-harness-quota
+```
+
+Claude Code adds the plugin's `bin` directory to its Bash-tool `PATH`, so agents can invoke `harness-quota` without a symlink or global installation.
+
+### Pi package
+
+<!-- x-release-please-start-version -->
+
+```bash
+pi install git:github.com/trautonen/herdr-harness-quota@v0.3.0
+```
+
+<!-- x-release-please-end -->
+
+The package contains a portable `harness-quota` skill. Invoke it explicitly with:
+
+```text
+/skill:harness-quota
+```
+
+The skill runs its bundled wrapper relative to `SKILL.md`, so it does not require a symlink.
+
+## Unified model
+
+Every available provider has three ordered windows:
+
+| Minutes | Window |
+|---:|---|
+| 300 | 5 hours |
+| 10080 | 1 week |
+| 43200 | 30 days |
+
+Claude and Codex do not report a 30-day window, so it is estimated from the recorded weekly usage in the [cache](#cache). Samples whose weekly reset times lie within a day of each other belong to the same weekly period. The estimate uses the current week and the peak of every completed week that ended within the last 30 days. Each completed week is weighted by how much of it falls inside those 30 days:
+
+```text
+round((current weekly usedPercent + Σ peak × overlap) × 7 days / (current week elapsed + Σ overlap × 7 days))
+```
+
+Weeks without recorded samples are left out, so a gap in the history does not count as zero usage. A steady 50% per week gives 50%. Until a completed week is recorded, or when the weekly window has no reset time, the 30-day value falls back to:
+
+```text
+round(5-hour usedPercent × 0.30 + weekly usedPercent × 0.70)
+```
+
+Cursor's Auto and API allowances map to the synthetic 5-hour and weekly windows. These values have `estimated: true`. Cursor's reported total allowance maps to 30 days. When another canonical window is missing, the estimate uses 30% of the shortest reported window and 70% of the longest. A single reported value is copied to missing windows. Every synthesized value is marked as estimated.
+
 ## CLI
 
 ```text
@@ -168,7 +198,7 @@ harness-quota details [--max-age SECONDS]
 
 ### JSON report
 
-Without a subcommand, `harness-quota` prints the JSON report described in [Unified model](#unified-model).
+Without a subcommand, `harness-quota` prints the JSON report shown in [Standalone CLI](#standalone-cli).
 
 ```text
 -p, --provider all|claude|codex|cursor
@@ -200,19 +230,6 @@ harness-quota --refresh never
 `details` prints the cached quota of every provider, its age in seconds, and the same `?` marker on the provider name, with the same `--max-age SECONDS` threshold. It reports a provider as unavailable when no readable snapshot exists or the snapshot holds no usable quota window.
 
 Refresh and cache failures return status 1. Every command exits with status 2 on invalid arguments.
-
-## Architecture
-
-The Python source is a package under `src/harness_quota`:
-
-- `providers/claude.py`, `providers/codex.py`, and `providers/cursor.py` own provider credentials, endpoints, payload extraction, and refresh behavior.
-- `model.py` defines canonical windows and estimation.
-- `auth.py`, `storage.py`, and `transport.py` provide shared boundary utilities.
-- `history.py` records refresh samples and estimates the 30-day window from them.
-- `service.py` dispatches provider refreshes, while `report.py` combines snapshots into the JSON contract.
-- `presentation.py` formats Herdr chips, and `cli.py` handles command parsing and output.
-
-Provider modules do not depend on the CLI or report layer. New providers can implement a refresh adapter and register it in `service.py` without changing the normalized model.
 
 ## Credentials
 
@@ -255,6 +272,19 @@ API keys are exchanged for a short-lived dashboard token. Native refresh tokens 
 Snapshots live under `$XDG_CACHE_HOME/herdr-harness-quota`, or `~/.cache/herdr-harness-quota`. The directory uses mode `0700`, snapshot files use mode `0600`, and writes are atomic.
 
 Every successful refresh also appends a sample of all windows to `<provider>.history.jsonl` in the same directory, one JSON object per line. Each write drops samples older than 37 days, which covers the 30-day window plus the oldest overlapping week. History files use mode `0600` and are rewritten atomically. Malformed lines are skipped. Deleting a history file only returns the 30-day estimate to the fallback formula until a new week completes.
+
+## Architecture
+
+The Python source is a package under `src/harness_quota`:
+
+- `providers/claude.py`, `providers/codex.py`, and `providers/cursor.py` own provider credentials, endpoints, payload extraction, and refresh behavior.
+- `model.py` defines canonical windows and estimation.
+- `auth.py`, `storage.py`, and `transport.py` provide shared boundary utilities.
+- `history.py` records refresh samples and estimates the 30-day window from them.
+- `service.py` dispatches provider refreshes, while `report.py` combines snapshots into the JSON contract.
+- `presentation.py` formats Herdr chips, and `cli.py` handles command parsing and output.
+
+Provider modules do not depend on the CLI or report layer. New providers can implement a refresh adapter and register it in `service.py` without changing the normalized model.
 
 ## Development
 
