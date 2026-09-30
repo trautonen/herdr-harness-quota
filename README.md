@@ -33,7 +33,7 @@ claude plugin marketplace add trautonen/herdr-harness-quota
 claude plugin install harness-quota@trautonen-tools
 ```
 
-The marketplace follows the default branch, not a release tag.
+The marketplace installs the plugin from the latest release tag. Users receive a new release when they run `claude plugin update harness-quota@trautonen-tools` or turn on auto-update for the marketplace in `/plugin`.
 
 Claude Code adds the plugin's `bin` directory to its Bash-tool `PATH`, so agents can invoke `harness-quota` without a symlink or global installation.
 

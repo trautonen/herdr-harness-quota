@@ -207,9 +207,9 @@ class QuotaTest(unittest.TestCase):
         self.assertEqual(toml_versions(REPOSITORY_ROOT / "herdr-plugin.toml"), [quota.VERSION])
         self.assertEqual(json_file("package.json")["version"], quota.VERSION)
         self.assertEqual(json_file(".claude-plugin/plugin.json")["version"], quota.VERSION)
-        self.assertEqual(
-            json_file(".claude-plugin/marketplace.json")["plugins"][0]["version"], quota.VERSION
-        )
+        marketplace_plugin = json_file(".claude-plugin/marketplace.json")["plugins"][0]
+        self.assertEqual(marketplace_plugin["version"], quota.VERSION)
+        self.assertEqual(marketplace_plugin["source"]["ref"], f"v{quota.VERSION}")
 
         readme = (REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8")
         blocks = re.findall(

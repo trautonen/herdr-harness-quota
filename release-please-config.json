@@ -15,6 +15,11 @@
           "path": ".claude-plugin/marketplace.json",
           "jsonpath": "$.plugins[0].version"
         },
+        {
+          "type": "json",
+          "path": ".claude-plugin/marketplace.json",
+          "jsonpath": "$.plugins[0].source.ref"
+        },
         { "type": "toml", "path": "herdr-plugin.toml", "jsonpath": "$.version" },
         { "type": "generic", "path": "src/harness_quota/config.py" },
         { "type": "generic", "path": "README.md" }
