@@ -75,9 +75,7 @@ herdr plugin link /path/to/herdr-harness-quota
 
 The plugin adds the actions `Quota: refresh all` and `Quota: show details`. To show quota chips in the tab bar, add the command entries from [`examples/herdr-config.toml`](examples/herdr-config.toml) to the Herdr configuration. Replace `/path/to/herdr-harness-quota` in each entry with the checkout path or the installed plugin root, which `herdr plugin list --json` reports as `plugin_root`. Tab-bar commands do not receive `$HERDR_PLUGIN_ROOT`, so the path must be absolute.
 
-Tab-bar reads return cached data immediately and start a detached refresh after 15 minutes. Override the interval with `herdr-harness-quota chip PROVIDER --refresh-after SECONDS`.
-
-A chip keeps showing the last cached quota while a refresh runs or fails. Once the snapshot is older than `--max-age` (default 3600 seconds), the provider label gets a `?` marker, for example `cx? 5h92% 1w89% 30d90%`. Set the threshold with `herdr-harness-quota chip PROVIDER --max-age SECONDS` or `herdr-harness-quota details --max-age SECONDS`. `details` shows the cached quota, its age in seconds, and the same marker on the provider name. A chip prints nothing, and `details` reports unavailable, when no readable snapshot exists or the snapshot holds no usable quota window.
+[Herdr commands](#herdr-commands) describes what the chips show, when they refresh, and how to change the intervals.
 
 ## Unified model
 
@@ -195,11 +193,11 @@ harness-quota --refresh never
 
 ### Herdr commands
 
-`chip PROVIDER` prints compact quota text for the Herdr tab bar. `all` prints every provider on one line. `--max-age SECONDS` sets the stale marker threshold (default 3600), and `--refresh-after SECONDS` sets the refresh interval (default 900).
+`chip PROVIDER` prints compact quota text for the Herdr tab bar. `all` prints every provider on one line. A chip reads the cache and returns immediately. When the snapshot is missing or older than `--refresh-after SECONDS` (default 900), it also starts a detached refresh. A chip keeps showing the last cached quota while a refresh runs or fails. Once the snapshot is older than `--max-age SECONDS` (default 3600), the provider label gets a `?` marker, for example `cx? 5h92% 1w89% 30d90%`. A chip prints nothing when no readable snapshot exists or the snapshot holds no usable quota window.
 
 `refresh PROVIDER` fetches current quota for one provider or `all` and updates the cache. `--timeout SECONDS` sets the timeout per provider (default 12). It exits with status 1 when any provider fails.
 
-`details` prints cached quota and its age. `--max-age SECONDS` sets the stale marker threshold (default 3600).
+`details` prints the cached quota of every provider, its age in seconds, and the same `?` marker on the provider name, with the same `--max-age SECONDS` threshold. It reports a provider as unavailable when no readable snapshot exists or the snapshot holds no usable quota window.
 
 Refresh and cache failures return status 1. Every command exits with status 2 on invalid arguments.
 
