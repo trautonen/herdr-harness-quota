@@ -1,6 +1,6 @@
 id = "harness-quota"
 name = "Harness Quota"
-version = "0.2.0"
+version = "0.3.0"
 min_herdr_version = "0.9.0"
 description = "Display Claude, Codex, and Cursor quota in Herdr"
 platforms = ["macos", "linux"]

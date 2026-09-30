@@ -1,7 +1,7 @@
 {
   "name": "harness-quota",
   "displayName": "Harness Quota",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Read normalized Claude, Codex, and Cursor quota as JSON",
   "author": {
     "name": "Tapio Rautonen"
@@ -9,6 +9,11 @@
   "homepage": "https://github.com/trautonen/herdr-harness-quota",
   "repository": "https://github.com/trautonen/herdr-harness-quota",
   "license": "MIT",
-  "keywords": ["claude", "codex", "cursor", "quota"],
+  "keywords": [
+    "claude",
+    "codex",
+    "cursor",
+    "quota"
+  ],
   "skills": "./skills/"
 }
