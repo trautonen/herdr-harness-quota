@@ -252,6 +252,18 @@ class QuotaTest(unittest.TestCase):
 
             self.assertIn("must be zero or greater", errors.getvalue())
 
+    def test_refresh_timeout_must_be_positive(self):
+        for timeout in ("0", "-1"):
+            errors = io.StringIO()
+            with redirect_stderr(errors), self.assertRaises(SystemExit):
+                quota.parser().parse_args(["refresh", "all", "--timeout", timeout])
+
+            self.assertIn("must be greater than zero", errors.getvalue())
+
+        arguments = quota.parser().parse_args(["refresh", "all", "--timeout", "5"])
+
+        self.assertEqual(arguments.timeout, 5.0)
+
     def test_refresh_interval_can_be_overridden(self):
         report_arguments = quota.parser().parse_args(["--stale-after", "120"])
         chip_arguments = quota.parser().parse_args(["chip", "claude", "--refresh-after", "300"])
