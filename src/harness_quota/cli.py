@@ -122,7 +122,7 @@ def parser() -> argparse.ArgumentParser:
 
     refresh = subparsers.add_parser("refresh", help="fetch current quota")
     refresh.add_argument("provider", choices=(*PROVIDERS, "all"))
-    refresh.add_argument("--timeout", type=float, default=12.0)
+    refresh.add_argument("--timeout", type=positive_float, default=12.0)
 
     details = subparsers.add_parser("details", help="print current quota details")
     details.add_argument("--max-age", type=nonnegative_integer, default=DEFAULT_STALE_MARKER_AGE)

@@ -293,7 +293,7 @@ A change is breaking when it changes the public interface in an incompatible way
 
 Update the README in the same pull request as any user-visible change.
 
-After each push to `main`, release-please keeps a release pull request open. It updates `CHANGELOG.md` and every version declaration. The repository must enable **Allow GitHub Actions to create and approve pull requests** under Settings > Actions > General, because the release workflow opens the pull request with its `GITHUB_TOKEN`. Without this setting, no release pull request, tag, or GitHub release appears. Merging the release pull request tags the commit `vX.Y.Z` and publishes the GitHub release. The release pull request shows no checks, because pull requests created with the workflow's `GITHUB_TOKEN` do not trigger workflows.
+After each push to `main`, release-please keeps a release pull request open. It updates `CHANGELOG.md` and every version declaration. The repository must enable **Allow GitHub Actions to create and approve pull requests** under Settings > Actions > General, because the release workflow opens the pull request with its `GITHUB_TOKEN`. Without this setting, no release pull request, tag, or GitHub release appears. Merging the release pull request tags the commit `vX.Y.Z` and publishes the GitHub release. The release pull request lists no checks. Each update that release-please pushes starts a run of the `checks` workflow, visible in the repository's Actions tab as **Action required**. A maintainer approves the run from the release pull request under Files changed > Awaiting approval by selecting **Approve workflows to run**. Merging the release pull request does not require these checks.
 
 ## License
 
