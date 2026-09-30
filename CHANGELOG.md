@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/trautonen/herdr-harness-quota/compare/v0.3.0...v0.3.1) (2026-09-30)
+
+
+### Bug Fixes
+
+* name the marketplace after the repository ([b5d71d4](https://github.com/trautonen/herdr-harness-quota/commit/b5d71d43930c4e2ede0b4e7f29789c7771c59200))
+
 ## [0.3.0](https://github.com/trautonen/herdr-harness-quota/compare/v0.2.0...v0.3.0) (2026-09-30)
 
 

@@ -21,7 +21,7 @@ Install the plugin from GitHub:
 <!-- x-release-please-start-version -->
 
 ```bash
-herdr plugin install trautonen/herdr-harness-quota --ref v0.3.0
+herdr plugin install trautonen/herdr-harness-quota --ref v0.3.1
 ```
 
 <!-- x-release-please-end -->
@@ -53,7 +53,7 @@ Chips read the cache and return immediately. When a snapshot is missing or older
 <!-- x-release-please-start-version -->
 
 ```bash
-uv tool install git+https://github.com/trautonen/herdr-harness-quota.git@v0.3.0
+uv tool install git+https://github.com/trautonen/herdr-harness-quota.git@v0.3.1
 ```
 
 <!-- x-release-please-end -->
@@ -148,7 +148,7 @@ Claude Code adds the plugin's `bin` directory to its Bash-tool `PATH`, so agents
 <!-- x-release-please-start-version -->
 
 ```bash
-pi install git:github.com/trautonen/herdr-harness-quota@v0.3.0
+pi install git:github.com/trautonen/herdr-harness-quota@v0.3.1
 ```
 
 <!-- x-release-please-end -->
