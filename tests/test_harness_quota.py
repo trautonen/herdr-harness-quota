@@ -1,7 +1,9 @@
+import argparse
 import base64
 import io
 import json
 import os
+import re
 import sqlite3
 import stat
 import sys
@@ -12,8 +14,15 @@ from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
+try:
+    import tomllib
+except ModuleNotFoundError:
+    tomllib = None
+
 sys.path.insert(0, str(Path(__file__).parents[1] / "src"))
 import harness_quota as quota
+
+REPOSITORY_ROOT = Path(__file__).parents[1]
 
 HOUR = 3600
 DAY = 24 * HOUR
@@ -33,6 +42,27 @@ def weekly_sample(captured_at, used_percent, resets_at, estimated=False):
 
 def weekly_window(used_percent, resets_at, estimated=False):
     return weekly_sample(NOW, used_percent, resets_at, estimated)["windows"][0]
+
+
+def toml_versions(path, *table):
+    text = path.read_text(encoding="utf-8")
+    if tomllib is None:
+        return re.findall(r'(?m)^version = "([^"\n]*)"$', text)
+    document = tomllib.loads(text)
+    for key in table:
+        document = document[key]
+    return [document["version"]]
+
+
+def parser_names(argument_parser):
+    names = set()
+    for action in argument_parser._actions:
+        names.update(action.option_strings)
+        if isinstance(action, argparse._SubParsersAction):
+            for name, subparser in action.choices.items():
+                names.add(name)
+                names.update(parser_names(subparser))
+    return names
 
 
 class QuotaTest(unittest.TestCase):
@@ -166,6 +196,39 @@ class QuotaTest(unittest.TestCase):
         self.assertEqual(exit_code, 2)
         self.assertIn("invalid background refresh provider", errors.getvalue())
         self.assertTrue(victim_exists)
+
+    def test_version_declarations_match(self):
+        def json_file(relative_path):
+            return json.loads((REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8"))
+
+        self.assertEqual(
+            toml_versions(REPOSITORY_ROOT / "pyproject.toml", "project"), [quota.VERSION]
+        )
+        self.assertEqual(toml_versions(REPOSITORY_ROOT / "herdr-plugin.toml"), [quota.VERSION])
+        self.assertEqual(json_file("package.json")["version"], quota.VERSION)
+        self.assertEqual(json_file(".claude-plugin/plugin.json")["version"], quota.VERSION)
+        marketplace_plugin = json_file(".claude-plugin/marketplace.json")["plugins"][0]
+        self.assertEqual(marketplace_plugin["version"], quota.VERSION)
+        self.assertEqual(marketplace_plugin["source"]["ref"], f"v{quota.VERSION}")
+
+        readme = (REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8")
+        blocks = re.findall(
+            r"<!-- x-release-please-start-version -->(.*?)<!-- x-release-please-end -->",
+            readme,
+            re.DOTALL,
+        )
+        readme_versions = [
+            version for block in blocks for version in re.findall(r"\d+\.\d+\.\d+", block)
+        ]
+        self.assertEqual(set(readme_versions), {quota.VERSION})
+
+    def test_readme_documents_every_cli_option(self):
+        readme = (REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8")
+        cli_section = re.search(r"(?ms)^## CLI\n(.*?)(?=^## )", readme).group(1)
+
+        for name in sorted(parser_names(quota.parser())):
+            with self.subTest(name=name):
+                self.assertRegex(cli_section, rf"(?<![\w-]){re.escape(name)}(?![\w-])")
 
     def test_refresh_interval_defaults_to_fifteen_minutes(self):
         report_arguments = quota.parser().parse_args([])

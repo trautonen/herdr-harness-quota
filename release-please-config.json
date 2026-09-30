@@ -1,0 +1,29 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "release-type": "python",
+  "bump-minor-pre-major": true,
+  "include-component-in-tag": false,
+  "bootstrap-sha": "4e4b2ce4ba093550a2256010b3ebbb7e508427d5",
+  "pull-request-title-pattern": "chore: release${component} ${version}",
+  "packages": {
+    ".": {
+      "extra-files": [
+        { "type": "json", "path": "package.json", "jsonpath": "$.version" },
+        { "type": "json", "path": ".claude-plugin/plugin.json", "jsonpath": "$.version" },
+        {
+          "type": "json",
+          "path": ".claude-plugin/marketplace.json",
+          "jsonpath": "$.plugins[0].version"
+        },
+        {
+          "type": "json",
+          "path": ".claude-plugin/marketplace.json",
+          "jsonpath": "$.plugins[0].source.ref"
+        },
+        { "type": "toml", "path": "herdr-plugin.toml", "jsonpath": "$.version" },
+        { "type": "generic", "path": "src/harness_quota/config.py" },
+        { "type": "generic", "path": "README.md" }
+      ]
+    }
+  }
+}
