@@ -30,10 +30,18 @@ The repository contains a Claude Code plugin and marketplace manifest. Install i
 
 ```bash
 claude plugin marketplace add trautonen/herdr-harness-quota
-claude plugin install harness-quota@trautonen-tools
+claude plugin install harness-quota@herdr-harness-quota
 ```
 
-The marketplace installs the plugin from the latest release tag. Users receive a new release when they run `claude plugin update harness-quota@trautonen-tools` or turn on auto-update for the marketplace in `/plugin`.
+The marketplace installs the plugin from the latest release tag. Users receive a new release when they run `claude plugin update harness-quota@herdr-harness-quota` or turn on auto-update for the marketplace in `/plugin`.
+
+If you installed version 0.3.0 from the marketplace, your plugin id is `harness-quota@trautonen-tools`. The marketplace is named `herdr-harness-quota` in later releases, so updates do not reach that id. Remove the old marketplace, which also uninstalls the plugin, and then add the marketplace and install the plugin again:
+
+```bash
+claude plugin marketplace remove trautonen-tools
+claude plugin marketplace add trautonen/herdr-harness-quota
+claude plugin install harness-quota@herdr-harness-quota
+```
 
 Claude Code adds the plugin's `bin` directory to its Bash-tool `PATH`, so agents can invoke `harness-quota` without a symlink or global installation.
 
