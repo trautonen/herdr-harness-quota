@@ -1,4 +1,4 @@
-VERSION = "0.2.0"  # x-release-please-version
+VERSION = "0.3.0"  # x-release-please-version
 PROVIDERS = ("claude", "codex", "cursor")
 CANONICAL_MINUTES = (300, 10080, 43200)
 DEFAULT_MAX_AGE = 900
