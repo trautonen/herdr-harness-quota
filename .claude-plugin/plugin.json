@@ -1,7 +1,7 @@
 {
   "name": "harness-quota",
   "displayName": "Harness Quota",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Read normalized Claude, Codex, and Cursor quota as JSON",
   "author": {
     "name": "Tapio Rautonen"

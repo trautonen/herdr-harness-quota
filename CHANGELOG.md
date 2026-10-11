@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2](https://github.com/trautonen/herdr-harness-quota/compare/v0.3.1...v0.3.2) (2026-10-11)
+
+
+### Bug Fixes
+
+* count the current week as a full week in the 30-day estimate ([ec6528e](https://github.com/trautonen/herdr-harness-quota/commit/ec6528e6da77156cc590fba8f62605daef7d2136))
+
 ## [0.3.1](https://github.com/trautonen/herdr-harness-quota/compare/v0.3.0...v0.3.1) (2026-09-30)
 
 
