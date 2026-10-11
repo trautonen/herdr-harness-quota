@@ -93,12 +93,12 @@ def estimate_monthly_usage(
         return None
 
     known_usage = float(weekly_window["usedPercent"])
-    known_span = float(min(max(now - (resets_at - WEEK_SECONDS), 0), WEEK_SECONDS))
+    known_weeks = 1.0
     for end, peak in peaks.items():
         overlap = min(max((end - max(end - WEEK_SECONDS, month_start)) / WEEK_SECONDS, 0), 1)
         known_usage += peak * overlap
-        known_span += overlap * WEEK_SECONDS
-    return max(0, min(100, round(known_usage * WEEK_SECONDS / known_span)))
+        known_weeks += overlap
+    return max(0, min(100, round(known_usage / known_weeks)))
 
 
 def record_snapshot(provider: str, windows: list[dict[str, Any]]) -> None:
