@@ -768,14 +768,20 @@ class QuotaTest(unittest.TestCase):
         ]
         current = weekly_window(20, NOW + 5 * DAY)
 
-        self.assertEqual(quota.history.estimate_monthly_usage(samples, current, NOW), 70)
+        self.assertEqual(quota.history.estimate_monthly_usage(samples, current, NOW), 45)
+
+    def test_history_estimate_just_after_weekly_reset_averages_known_weeks(self):
+        samples = [weekly_sample(NOW - DAY, 100, NOW - HOUR)]
+        current = weekly_window(6, NOW + WEEK - HOUR)
+
+        self.assertEqual(quota.history.estimate_monthly_usage(samples, current, NOW), 53)
 
     def test_history_estimate_of_steady_weekly_usage_is_that_usage(self):
         samples = [
             weekly_sample(end - DAY, 50, end)
             for end in (NOW - 3 * DAY - 12 * HOUR - week * WEEK for week in range(5))
         ]
-        current = weekly_window(25, NOW + 3 * DAY + 12 * HOUR)
+        current = weekly_window(50, NOW + 3 * DAY + 12 * HOUR)
 
         self.assertEqual(quota.history.estimate_monthly_usage(samples, current, NOW), 50)
 
@@ -786,13 +792,13 @@ class QuotaTest(unittest.TestCase):
         ]
         current = weekly_window(10, NOW + 6 * DAY)
 
-        self.assertEqual(quota.history.estimate_monthly_usage(samples, current, NOW), 38)
+        self.assertEqual(quota.history.estimate_monthly_usage(samples, current, NOW), 26)
 
     def test_history_estimate_does_not_count_gap_as_unused(self):
         samples = [weekly_sample(NOW - 16 * DAY, 42, NOW - 15 * DAY)]
         current = weekly_window(6, NOW + 6 * DAY)
 
-        self.assertEqual(quota.history.estimate_monthly_usage(samples, current, NOW), 42)
+        self.assertEqual(quota.history.estimate_monthly_usage(samples, current, NOW), 24)
 
     def test_history_estimate_groups_jittering_resets_into_one_week(self):
         end = NOW - 2 * DAY
@@ -802,7 +808,7 @@ class QuotaTest(unittest.TestCase):
         ]
         current = weekly_window(0, NOW + 5 * DAY)
 
-        self.assertEqual(quota.history.estimate_monthly_usage(samples, current, NOW), 47)
+        self.assertEqual(quota.history.estimate_monthly_usage(samples, current, NOW), 30)
 
     def test_history_estimate_counts_completed_week_split_by_reset_jitter_once(self):
         end = NOW - 2 * DAY + HOUR // 2
@@ -812,7 +818,7 @@ class QuotaTest(unittest.TestCase):
         ]
         current = weekly_window(0, NOW + 5 * DAY)
 
-        self.assertEqual(quota.history.estimate_monthly_usage(samples, current, NOW), 47)
+        self.assertEqual(quota.history.estimate_monthly_usage(samples, current, NOW), 30)
 
     def test_record_snapshot_appends_private_history_samples(self):
         windows = quota.complete_windows(
@@ -925,7 +931,7 @@ class QuotaTest(unittest.TestCase):
         )
         self.assertEqual(
             history_window,
-            {"minutes": 43200, "usedPercent": 70, "resetsAt": None, "estimated": True},
+            {"minutes": 43200, "usedPercent": 45, "resetsAt": None, "estimated": True},
         )
 
     def test_record_snapshot_skips_unusable_history_values(self):
@@ -959,7 +965,7 @@ class QuotaTest(unittest.TestCase):
                 monthly_window = quota.read_snapshot("claude")["windows"][2]
                 history_lines = path.read_text().splitlines()
 
-        self.assertEqual(monthly_window["usedPercent"], 70)
+        self.assertEqual(monthly_window["usedPercent"], 45)
         self.assertEqual(json.loads(history_lines[0]), valid)
 
     def test_cursor_snapshot_keeps_reported_thirty_days(self):

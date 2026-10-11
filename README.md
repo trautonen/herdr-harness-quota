@@ -174,10 +174,10 @@ Every available provider has three ordered windows:
 Claude and Codex do not report a 30-day window, so it is estimated from the recorded weekly usage in the [cache](#cache). Samples whose weekly reset times lie within a day of each other belong to the same weekly period. The estimate uses the current week and the peak of every completed week that ended within the last 30 days. Each completed week is weighted by how much of it falls inside those 30 days:
 
 ```text
-round((current weekly usedPercent + Σ peak × overlap) × 7 days / (current week elapsed + Σ overlap × 7 days))
+round((current weekly usedPercent + Σ peak × overlap) / (1 + Σ overlap))
 ```
 
-Weeks without recorded samples are left out, so a gap in the history does not count as zero usage. A steady 50% per week gives 50%. Until a completed week is recorded, or when the weekly window has no reset time, the 30-day value falls back to:
+The current week counts as one full week, so its usage so far is not scaled up by the time elapsed. Weeks without recorded samples are left out, so a gap in the history does not count as zero usage. A steady 50% every week, including the current week, gives 50%. Earlier in the week, the partial current week's usage pulls the estimate down. Until a completed week is recorded, or when the weekly window has no reset time, the 30-day value falls back to:
 
 ```text
 round(5-hour usedPercent × 0.30 + weekly usedPercent × 0.70)
