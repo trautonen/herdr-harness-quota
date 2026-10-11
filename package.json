@@ -1,6 +1,6 @@
 {
   "name": "@trautonen/harness-quota",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Read normalized Claude, Codex, and Cursor quota",
   "author": "Tapio Rautonen",
   "license": "MIT",
